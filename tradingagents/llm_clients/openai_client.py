@@ -151,7 +151,12 @@ class OpenAIClient(BaseLLMClient):
             default_base, api_key_env = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = self.base_url or default_base
             if api_key_env:
-                api_key = os.environ.get(api_key_env)
+                # Prefer provider-specific env; fall back so OpenAI-compatible
+                # endpoints still get an explicit key (some stacks do not inherit
+                # OPENAI_API_KEY when base_url is non-default).
+                api_key = os.environ.get(api_key_env) or os.environ.get(
+                    "OPENAI_API_KEY"
+                )
                 if api_key:
                     llm_kwargs["api_key"] = api_key
             else:
