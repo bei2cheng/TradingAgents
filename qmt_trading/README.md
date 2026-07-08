@@ -82,6 +82,9 @@ python -m qmt_trading.run_strategy plan --mode sim [--date YYYYMMDD]
 
 # 3. 真正下单：在 plan 基础上调用 QMT 下单接口
 python -m qmt_trading.run_strategy execute --mode sim [--date YYYYMMDD] [--yes]
+
+# 4. 撤销所有未完全成交的当日委托（未报/待报/已报/部成），建议收盘前执行，避免资金一直被冻结
+python -m qmt_trading.run_strategy cancel-pending --mode sim
 ```
 
 `--mode` 支持 `sim`（模拟盘）/ `live`（实盘）。
@@ -105,10 +108,53 @@ python -m qmt_trading.run_strategy execute --mode sim [--date YYYYMMDD] [--yes]
 - `ImportError: cannot import name 'xtpythonclient' from 'xtquant'`：Python 版本与 `xtquant` 的编译产物不匹配，确认当前环境是 Python 3.11（见上文环境说明）。
 - `连接 QMT 客户端失败（返回码 -1）`：对应 `--mode` 的 QMT 客户端没有启动/没有登录，或 `userdata_mini` 路径没有指向正确的客户端实例；用 `tasklist | findstr XtMiniQmt` 确认后台服务是否已启动。
 - 未配置 `QMT_SIM_ACCOUNT_ID` / `QMT_LIVE_ACCOUNT_ID`：会在启动时直接抛出 `RuntimeError`，按提示在 `.env` 里补上对应账号。
+- 委托一直显示"已报"、成交量为 0：`status`/`cancel-pending` 打印的委托状态是 xtquant 原始状态码（`50`=已报未成，`55`=部成，`56`=已成，`54`=已撤，`57`=废单）。全天没有成交常见原因：①模拟盘的撮合机制通常只在下单那一刻按当时快照做一次性判断能否立即成交，不会像真实交易所那样持续追踪后续行情去撮合挂单；②`plan`/`execute` 取的最新价依赖本地行情缓存，若缓存尚未预热可能拿到上一交易日收盘价（`get_latest_price` 已在下单前加了 `subscribe_quote` + 短暂等待来缓解这个问题，但极端情况下仍可能取到偏旧的价格）。未成交的委托不会自动撤销、资金会一直被冻结，建议收盘前用 `cancel-pending` 手动清理（也可以为它单独建一个收盘前的计划任务）。
 
 ---
 
-## 三、单元测试（不需要 QMT 客户端/xtquant）
+## 三、Windows 计划任务自动化（每个工作日免手动运行）
+
+适用场景：早上出门前在家里这台电脑上启动并登录好 QMT 模拟盘客户端，之后不用再手动敲命令，Windows 会自动在交易时段内跑 `execute` 下单、收盘前跑 `cancel-pending` 清理未成交单。
+
+### 已创建的两个计划任务
+
+| 任务名 | 时间（工作日） | 执行脚本 | 作用 |
+|---|---|---|---|
+| `QMT_AutoTrade_Sim` | 09:31 | [qmt_trading/scheduled_run_sim.bat](scheduled_run_sim.bat) | `execute --mode sim --yes` 自动下单 |
+| `QMT_AutoTrade_Sim_CancelPending` | 14:57 | [qmt_trading/scheduled_cancel_pending_sim.bat](scheduled_cancel_pending_sim.bat) | `cancel-pending --mode sim` 撤销当天未成交委托，释放冻结资金 |
+
+两个 `.bat` 都是先 `cd /d` 到仓库目录，再用 `tradingagents` 环境的 `python.exe`（`C:\Users\fengzm\anaconda3\envs\tradingagents\python.exe`，不依赖 `conda activate`）跑对应命令，输出统一追加到 `reports\qmt_scheduled_run.log`。
+
+**前提**：计划任务只负责调用 `run_strategy`，不会帮你打开/登录 QMT 客户端——09:31 之前必须已手动启动并登录国金 QMT 模拟盘客户端，否则 `execute` 会因连不上客户端而失败（失败信息记在日志里，不会主动提醒）。
+
+**注意**：`execute` 用了 `--yes`，跳过了手动输入 `yes` 确认这一步安全检查，是无人值守自动化的必要代价（目前仅用于 sim 模拟盘，不涉及真实资金）。
+
+### 常用管理命令
+
+在 git-bash 里执行 `schtasks` 时，单斜杠参数（如 `/tn`）会被 MSYS 误当成文件路径转换，需要加 `MSYS_NO_PATHCONV=1` 前缀：
+
+```bash
+# 查看任务详情
+MSYS_NO_PATHCONV=1 schtasks /query /tn "QMT_AutoTrade_Sim" /v /fo LIST
+MSYS_NO_PATHCONV=1 schtasks /query /tn "QMT_AutoTrade_Sim_CancelPending" /v /fo LIST
+
+# 临时禁用（不删除，比如当天不想自动交易）
+MSYS_NO_PATHCONV=1 schtasks /change /tn "QMT_AutoTrade_Sim" /disable
+MSYS_NO_PATHCONV=1 schtasks /change /tn "QMT_AutoTrade_Sim_CancelPending" /disable
+
+# 重新启用
+MSYS_NO_PATHCONV=1 schtasks /change /tn "QMT_AutoTrade_Sim" /enable
+
+# 彻底删除
+MSYS_NO_PATHCONV=1 schtasks /delete /tn "QMT_AutoTrade_Sim" /f
+MSYS_NO_PATHCONV=1 schtasks /delete /tn "QMT_AutoTrade_Sim_CancelPending" /f
+```
+
+也可以直接打开 Windows「任务计划程序」图形界面，在根目录下找到这两个任务手动调整触发时间或禁用。
+
+---
+
+## 四、单元测试（不需要 QMT 客户端/xtquant）
 
 ```bash
 pytest tests/test_qmt_report_parser.py tests/test_qmt_position_sizer.py -v

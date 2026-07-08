@@ -5,6 +5,7 @@
   python -m qmt_trading.run_strategy status --mode sim
   python -m qmt_trading.run_strategy plan --mode sim [--date 20260704]
   python -m qmt_trading.run_strategy execute --mode sim [--date 20260704] [--yes]
+  python -m qmt_trading.run_strategy cancel-pending --mode sim
 
 live（实盘）模式额外要求 --i-understand-real-money，且下单前必须交互输入 "CONFIRM"。
 运行前请先启动国金证券QMT交易端并登录对应账号（sim=模拟盘 / live=实盘）。
@@ -58,6 +59,22 @@ def cmd_status(args, config):
             print(f"  {o.stock_code} {o.order_status} 委托{o.order_volume} 已成{o.traded_volume}")
     finally:
         gateway.disconnect()
+
+
+def cmd_cancel_pending(args, config):
+    gateway = _connect(config, args.mode)
+    try:
+        results = gateway.cancel_open_orders()
+    finally:
+        gateway.disconnect()
+
+    if not results:
+        print("没有未成交的委托需要撤销。")
+        return
+    print(f"\n=== 撤单结果（{args.mode}，共{len(results)}笔）===")
+    for stock_code, order_id, ret in results:
+        ok = "已提交撤单" if ret == 0 else f"撤单请求失败（返回码 {ret}）"
+        print(f"  {stock_code} order_id={order_id}: {ok}")
 
 
 def _build_plan(args, config):
@@ -174,6 +191,10 @@ def main():
 
     sub.add_parser("status", parents=[common], help="查询账户资产/持仓/委托（只读）")
     sub.add_parser("plan", parents=[common], help="生成委托预览，不下单")
+    sub.add_parser(
+        "cancel-pending", parents=[common],
+        help="撤销所有未完全成交的当日委托（未报/待报/已报/部成），建议收盘前执行",
+    )
     p_execute = sub.add_parser("execute", parents=[common], help="生成委托并真实下单")
     p_execute.add_argument("--yes", action="store_true", help="跳过交互确认")
     p_execute.add_argument(
@@ -196,6 +217,8 @@ def main():
         cmd_plan(args, config)
     elif args.command == "execute":
         cmd_execute(args, config)
+    elif args.command == "cancel-pending":
+        cmd_cancel_pending(args, config)
 
 
 if __name__ == "__main__":

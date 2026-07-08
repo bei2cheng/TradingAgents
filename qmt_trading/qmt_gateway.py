@@ -12,6 +12,15 @@ from qmt_trading.position_sizer import PositionInfo
 
 logger = logging.getLogger("qmt_trading")
 
+_QUOTE_WARMUP_SECONDS = 1.0
+
+_OPEN_ORDER_STATUS_NAMES = (
+    "ORDER_UNREPORTED",
+    "ORDER_WAIT_REPORTING",
+    "ORDER_REPORTED",
+    "ORDER_PART_SUCC",
+)
+
 
 def _ensure_xtquant_importable(site_packages_path: str):
     try:
@@ -113,6 +122,12 @@ class QmtGateway:
     def get_latest_price(self, tickers: list) -> dict:
         from xtquant import xtdata
 
+        # get_full_tick() 在本地行情缓存尚未预热时可能只返回上一交易日收盘快照；
+        # 先订阅一次分笔行情、短暂等待缓存刷新，避免拿到滞后价格。
+        for ticker in tickers:
+            xtdata.subscribe_quote(ticker, period="tick")
+        time.sleep(_QUOTE_WARMUP_SECONDS)
+
         ticks = xtdata.get_full_tick(tickers)
         prices = {}
         for ticker in tickers:
@@ -144,3 +159,15 @@ class QmtGateway:
 
     def query_trades(self):
         return self._trader.query_stock_trades(self._account) or []
+
+    def cancel_open_orders(self) -> list:
+        """撤销所有未完全成交（未报/待报/已报/部成）的当日委托，返回 (代码, order_id, 撤单返回码) 列表。"""
+        from xtquant import xtconstant
+
+        open_statuses = {getattr(xtconstant, name) for name in _OPEN_ORDER_STATUS_NAMES}
+        results = []
+        for order in self.query_orders():
+            if order.order_status in open_statuses:
+                ret = self._trader.cancel_order_stock(self._account, order.order_id)
+                results.append((order.stock_code, order.order_id, ret))
+        return results
