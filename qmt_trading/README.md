@@ -161,3 +161,47 @@ pytest tests/test_qmt_report_parser.py tests/test_qmt_position_sizer.py -v
 ```
 
 覆盖报告解析（方向/仓位档位提取）和仓位计算（封顶、总仓位缩放、清仓、白名单过滤等纯逻辑），无需安装 xtquant 或启动 QMT 客户端即可运行。
+
+```bash
+pytest tests/test_qmt_stock_picker_conditions.py -v
+```
+
+覆盖周线选股4条策略条件的纯逻辑判断（构造合成周线数据，无需 baostock/网络）。
+
+---
+
+## 五、全市场周线选股：`qmt_trading.stock_picker`
+
+独立于上面的交易执行链路，用于从沪深主板+创业板全市场A股（剔除科创板/北交所/ST/次新股）里，按周线技术形态筛出当前符合条件的候选股票。数据来源是 `baostock`（免费，与 `reports/analyze_stock.py` 里获取行情用的是同一数据源）。
+
+### 用法
+
+```bash
+conda activate tradingagents
+
+# 全市场扫描，4条策略必须同时满足（默认，可能命中很少甚至为空）
+python -m qmt_trading.stock_picker.screener
+
+# 命中任意一条策略即可，结果会多一些
+python -m qmt_trading.stock_picker.screener --mode any
+
+# 策略2改用门槛更低的"突破前三周最高收盘/开盘价"判断（更激进，行情好时用）
+python -m qmt_trading.stock_picker.screener --mode any --aggressive
+
+# 联调用：只测几只指定股票，不用等全市场扫描
+python -m qmt_trading.stock_picker.screener --codes 600519.SH,000001.SZ,300750.SZ --mode any
+
+# 联调用：只扫描前N只
+python -m qmt_trading.stock_picker.screener --limit 300
+```
+
+全市场约4000+只股票，单线程逐只请求周线数据，实测约1秒/只，完整跑一遍预计 60-90 分钟。结果会打印到命令行，并保存为 `qmt_trading/stock_picker/output/selected_{YYYYMMDD}.md`（该目录已加入 `.gitignore`）。
+
+### 4条策略条件（详见 `qmt_trading/stock_picker/conditions.py`）
+
+1. 周线下跌后持续震荡：最新周之前连续3周十字星/短实体K线，最新周放量阳线并站稳5周线上方
+2. 本周收盘突破前四周最高价（`--aggressive` 时改为突破前三周最高收盘/开盘价）
+3. 5周线、20周线拐头向上，均线多头排列（5>10>20>60），股价不过分远离5周线，成交量同步放大
+4. 近期堆量周之后温和回调（未跌破20周线、成交量萎缩）
+
+默认 `--mode all` 要求4条同时满足；各阈值（放量倍数、偏离比例等）均为 `conditions.py` 顶部的常量，可按需调整。
