@@ -21,6 +21,9 @@
 
 ```bash
 python -m quant_strategy.cli define --text "MA5上穿MA20买入，MA5下穿MA20卖出" --name ma_cross
+
+# 策略描述较长时，也可以放在文件里（.txt/.md/.markdown 均可），二者二选一
+python -m quant_strategy.cli define --file strategy.md --name ma_cross
 ```
 
 处理逻辑（DSL 优先，codegen 兜底）：

@@ -20,6 +20,30 @@ def test_condition_rejects_unknown_comparator():
         Condition(left=IndicatorRef(name="close"), comparator="between", right=1.0)
 
 
+def test_condition_rejects_self_comparison():
+    with pytest.raises(DslError):
+        Condition(
+            left=IndicatorRef(name="volume"),
+            comparator="gt",
+            right=IndicatorRef(name="volume"),
+        )
+    with pytest.raises(DslError):
+        Condition(
+            left=IndicatorRef(name="ma", params={"window": 20}),
+            comparator="lt",
+            right=IndicatorRef(name="ma", params={"window": 20}),
+        )
+
+
+def test_condition_allows_same_indicator_with_different_params():
+    cond = Condition(
+        left=IndicatorRef(name="ma", params={"window": 5}),
+        comparator="cross_above",
+        right=IndicatorRef(name="ma", params={"window": 20}),
+    )
+    assert cond.comparator == "cross_above"
+
+
 def test_rule_leaf_requires_condition():
     with pytest.raises(DslError):
         Rule(op="leaf")

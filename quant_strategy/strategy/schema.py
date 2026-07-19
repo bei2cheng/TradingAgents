@@ -55,6 +55,8 @@ class Condition:
     def __post_init__(self):
         if self.comparator not in COMPARATORS:
             raise DslError(f"未知比较符：{self.comparator}，可选：{COMPARATORS}")
+        if isinstance(self.right, IndicatorRef) and self.left.key() == self.right.key():
+            raise DslError(f"条件两侧指标相同（{self.left.key()}），无法构成有效比较")
 
     def describe(self) -> str:
         right_desc = self.right.key() if isinstance(self.right, IndicatorRef) else str(self.right)

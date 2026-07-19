@@ -22,6 +22,19 @@ VALID_DSL_JSON = """
 
 UNSUPPORTED_JSON = '{"unsupported": true}'
 
+SELF_COMPARISON_JSON = """
+{
+  "entry_rule": {"op": "and", "children": [
+      {"op": "leaf", "condition": {
+          "left": {"name": "volume", "params": {}},
+          "comparator": "gt",
+          "right": {"name": "volume", "params": {}}
+      }}
+  ]},
+  "exit_rule": null
+}
+"""
+
 VALID_CODEGEN_CODE = f"""```python
 def {REQUIRED_FUNC_NAME}(df):
     ma5 = df["close"].rolling(5).mean()
@@ -71,6 +84,18 @@ def test_compile_text_to_strategy_falls_back_to_codegen_on_malformed_dsl_json(mo
     _patch_chat(monkeypatch, dsl_response="not valid json at all", codegen_response=VALID_CODEGEN_CODE)
 
     spec = compile_text_to_strategy("一些奇怪的描述", "weird")
+
+    assert spec.mode == "code"
+
+
+def test_compile_text_to_strategy_falls_back_to_codegen_on_self_comparison_dsl(monkeypatch):
+    """Regression test: an LLM DSL response comparing an indicator to itself (e.g. volume > volume,
+    seen in practice when the description needs pattern logic the DSL can't express) must NOT be
+    accepted as a valid strategy — it should fall back to codegen instead of silently producing a
+    rule that can never trigger."""
+    _patch_chat(monkeypatch, dsl_response=SELF_COMPARISON_JSON, codegen_response=VALID_CODEGEN_CODE)
+
+    spec = compile_text_to_strategy("堆量多连阳", "bot_vol_rally")
 
     assert spec.mode == "code"
 

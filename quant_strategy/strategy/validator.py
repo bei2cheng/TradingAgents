@@ -16,6 +16,7 @@ _ALLOWED_NODES = (
     ast.Name, ast.Constant, ast.Attribute,
     ast.And, ast.Or, ast.Not, ast.Invert, ast.UAdd, ast.USub,
     ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+    ast.BitAnd, ast.BitOr, ast.BitXor,  # pandas 向量化布尔运算依赖 &/|/^（非位运算安全风险）
     ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
     ast.In, ast.NotIn, ast.Is, ast.IsNot,
     ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp, ast.comprehension,

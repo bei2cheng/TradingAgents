@@ -19,8 +19,24 @@ def generate_signals(df):
 """
 
 
+VALID_CODE_WITH_VECTORIZED_BOOLEAN_MASK = """
+def generate_signals(df):
+    ma5 = df["close"].rolling(5).mean()
+    ma20 = df["close"].rolling(20).mean()
+    vol_up = df["volume"] > df["volume"].rolling(20).mean()
+    mask = (ma5 > ma20) & vol_up
+    return mask.map({True: "BUY", False: "HOLD"})
+"""
+
+
 def test_valid_code_passes():
     validate_code(VALID_CODE)
+
+
+def test_valid_code_with_pandas_bitwise_boolean_mask_passes():
+    """Pandas vectorized boolean masking requires &/|/^ (BitAnd/BitOr/BitXor), not and/or —
+    this must be whitelisted or codegen can never express multi-condition strategies."""
+    validate_code(VALID_CODE_WITH_VECTORIZED_BOOLEAN_MASK)
 
 
 @pytest.mark.parametrize("bad_code", [

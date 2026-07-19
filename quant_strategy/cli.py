@@ -3,6 +3,7 @@
 
 用法：
   python -m quant_strategy.cli define --text "MA5上穿MA20买入，下穿卖出" --name ma_cross
+  python -m quant_strategy.cli define --file strategy.md --name ma_cross
   python -m quant_strategy.cli backtest --strategy ma_cross --codes 600519.SH,000001.SZ --start 2024-01-01 --end 2026-07-01
   python -m quant_strategy.cli rate --strategy ma_cross --code 600519.SH --date 2026-07-18
   python -m quant_strategy.cli trade plan --strategy ma_cross --codes 600519.SH,000001.SZ --mode sim
@@ -29,11 +30,32 @@ def _load_strategy(name: str):
     return StrategySpec.load(path)
 
 
+_STRATEGY_TEXT_FILE_EXTS = (".txt", ".md", ".markdown")
+
+
+def _read_strategy_text_file(path: str) -> str:
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in _STRATEGY_TEXT_FILE_EXTS:
+        print(f"不支持的策略描述文件格式：{ext}（仅支持 {'/'.join(_STRATEGY_TEXT_FILE_EXTS)}）")
+        sys.exit(1)
+    if not os.path.isfile(path):
+        print(f"未找到策略描述文件：{path}")
+        sys.exit(1)
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read().strip()
+    if not text:
+        print(f"策略描述文件为空：{path}")
+        sys.exit(1)
+    return text
+
+
 def cmd_define(args):
     from quant_strategy.strategy.compiler import DslUnsupportedError, compile_text_to_strategy
 
+    text = _read_strategy_text_file(args.file) if args.file else args.text
+
     try:
-        spec = compile_text_to_strategy(args.text, args.name)
+        spec = compile_text_to_strategy(text, args.name)
     except DslUnsupportedError as e:
         print(f"无法把该描述转换为可执行策略：{e}")
         sys.exit(1)
@@ -141,7 +163,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_define = sub.add_parser("define", help="把策略文字描述转换成可执行策略并保存")
-    p_define.add_argument("--text", required=True, help="策略的中文文字描述")
+    p_define_input = p_define.add_mutually_exclusive_group(required=True)
+    p_define_input.add_argument("--text", help="策略的中文文字描述")
+    p_define_input.add_argument("--file", help="策略描述文件路径（.txt/.md/.markdown），与 --text 二选一")
     p_define.add_argument("--name", required=True, help="保存的策略名（对应 strategies/{name}.json）")
 
     p_backtest = sub.add_parser("backtest", help="对指定股票池和时间区间跑回测，输出报告")
