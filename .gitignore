@@ -223,3 +223,4 @@ __marimo__/
 .env.example
 reports/
 qmt_trading/stock_picker/output/
+quant_strategy/strategies/
