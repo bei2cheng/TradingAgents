@@ -7,6 +7,8 @@
                             │
                             ├--rate----> 某股票在某日期的 BUY/SELL/HOLD 评级（可解释）
                             │
+                            ├--screen--> 全市场扫描，找出当前满足条件的股票清单
+                            │
                             └--trade---> 适配成 qmt_trading.TradeDecision
                                               │
                                               ▼
@@ -70,7 +72,31 @@ python -m quant_strategy.cli rate --strategy ma_cross --code 600519.SH --date 20
 
 ---
 
-## 四、对接国金证券 QMT：`trade`
+## 四、全市场扫描：`screen`
+
+```bash
+# 默认：全市场（沪深主板+创业板），各股各自最新交易日，筛 BUY
+python -m quant_strategy.cli screen --strategy bot_vol_rally
+
+# 指定扫描日期
+python -m quant_strategy.cli screen --strategy bot_vol_rally --date 2026-07-18
+
+# 联调：指定小范围股票池，跳过全市场清单拉取
+python -m quant_strategy.cli screen --strategy bot_vol_rally --codes 600519.SH,000001.SZ,000002.SZ
+
+# 筛选需要清仓的持仓（SELL）
+python -m quant_strategy.cli screen --strategy bot_vol_rally --rating SELL
+```
+
+内部流程（`rating/screener.py::screen_market`）：`qmt_trading.stock_picker.universe.get_universe()` 拿全市场股票清单（沪深主板+创业板，剔除科创板/北交所/ST/停牌）→ `data/market_data.py::fetch_many()` 批量拉取行情（本地缓存，单只失败自动跳过不中断整体扫描）→ 对每只有数据的股票用其**最新一根K线所在日期**（或 `--date` 截断后的最后一根）调用 `rating/rater.py::rate()`（与回测/评级同一套信号引擎）→ 收集评级等于 `--rating`（默认 `BUY`）的股票，生成 Markdown 报告（代码/名称/评级/日期/收盘价/触发条件）。
+
+全市场约4000+只股票，单线程扫描通常需要几十分钟（受行情源接口速率和本地缓存命中率影响），不会默认自动触发——需要显式运行该命令。联调/小范围验证建议先用 `--codes` 或 `--limit` 缩小范围。
+
+报告默认落在 `strategies/reports/screen_{策略名}_{日期}.md`，可用 `--output` 指定路径。
+
+---
+
+## 五、对接国金证券 QMT：`trade`
 
 ```bash
 # 生成委托预览，不下单
@@ -93,7 +119,7 @@ python -m quant_strategy.cli trade execute \
 
 ---
 
-## 五、单元测试（不需要网络/xtquant）
+## 六、单元测试（不需要网络/xtquant）
 
 ```bash
 pytest tests/test_quant_strategy_*.py -v
@@ -121,9 +147,11 @@ quant_strategy/
     engine.py             # 事件驱动回测循环
     metrics.py            # 总收益/年化/回撤/夏普/卡玛/胜率/盈亏比/超额收益
     report.py             # Markdown回测报告生成
-  rating/rater.py          # 单日截面评级（复用回测同一信号引擎）
+  rating/
+    rater.py               # 单日截面评级（复用回测同一信号引擎）
+    screener.py            # 全市场扫描：批量评级+筛选+报告
   live/bridge.py           # 适配成 qmt_trading.TradeDecision，对接既有下单链路
-  cli.py                   # define / backtest / rate / trade 统一入口
+  cli.py                   # define / backtest / rate / screen / trade 统一入口
   strategies/              # 生成的策略JSON + 回测报告（已gitignore）
   data_cache/              # baostock行情缓存（已gitignore）
 ```

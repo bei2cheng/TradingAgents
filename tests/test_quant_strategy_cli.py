@@ -53,3 +53,39 @@ def test_define_parser_requires_exactly_one_of_text_or_file():
     args = parser.parse_args(["define", "--file", "strategy.md", "--name", "x"])
     assert args.file == "strategy.md"
     assert args.text is None
+
+
+def test_screen_parser_requires_strategy_and_defaults_rating_to_buy():
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["screen"])
+
+    args = parser.parse_args(["screen", "--strategy", "bot_vol_rally"])
+    assert args.strategy == "bot_vol_rally"
+    assert args.rating == "BUY"
+    assert args.date is None
+    assert args.codes is None
+    assert args.limit is None
+    assert args.lookback_days is None
+
+
+def test_screen_parser_rejects_invalid_rating_choice():
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["screen", "--strategy", "bot_vol_rally", "--rating", "HOLD"])
+
+
+def test_screen_parser_accepts_codes_limit_and_lookback():
+    parser = cli.build_parser()
+
+    args = parser.parse_args([
+        "screen", "--strategy", "bot_vol_rally",
+        "--codes", "600519.SH,000001.SZ", "--limit", "300",
+        "--lookback-days", "200", "--rating", "SELL",
+    ])
+    assert args.codes == "600519.SH,000001.SZ"
+    assert args.limit == 300
+    assert args.lookback_days == 200
+    assert args.rating == "SELL"

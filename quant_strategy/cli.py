@@ -6,6 +6,7 @@
   python -m quant_strategy.cli define --file strategy.md --name ma_cross
   python -m quant_strategy.cli backtest --strategy ma_cross --codes 600519.SH,000001.SZ --start 2024-01-01 --end 2026-07-01
   python -m quant_strategy.cli rate --strategy ma_cross --code 600519.SH --date 2026-07-18
+  python -m quant_strategy.cli screen --strategy bot_vol_rally
   python -m quant_strategy.cli trade plan --strategy ma_cross --codes 600519.SH,000001.SZ --mode sim
   python -m quant_strategy.cli trade execute --strategy ma_cross --codes 600519.SH,000001.SZ --mode sim
 """
@@ -96,6 +97,28 @@ def cmd_rate(args):
         print(f"{k}: {v}")
 
 
+def cmd_screen(args):
+    from quant_strategy.rating.screener import default_screen_report_path, generate_screen_report, screen_market
+
+    spec = _load_strategy(args.strategy)
+    codes = [c.strip() for c in args.codes.split(",") if c.strip()] if args.codes else None
+
+    kwargs = {"date": args.date, "codes": codes, "limit": args.limit, "target_rating": args.rating}
+    if args.lookback_days is not None:
+        kwargs["lookback_days"] = args.lookback_days
+
+    matches, stats = screen_market(spec, **kwargs)
+
+    report = generate_screen_report(matches, stats, spec)
+    print(report)
+
+    out_path = args.output or default_screen_report_path(args.strategy, stats["date"])
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(f"\n报告已保存：{out_path}")
+
+
 def cmd_trade_plan(args, execute: bool):
     from quant_strategy.live.bridge import build_plan_for_date
     from qmt_trading.position_sizer import format_order_plans
@@ -180,6 +203,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_rate.add_argument("--code", required=True, help="股票代码，如 600519.SH")
     p_rate.add_argument("--date", required=True, help="评级日期 YYYY-MM-DD")
 
+    p_screen = sub.add_parser("screen", help="全市场扫描：找出当前满足策略条件的股票")
+    p_screen.add_argument("--strategy", required=True, help="策略名")
+    p_screen.add_argument("--date", default=None, help="扫描日期 YYYY-MM-DD，默认各股各自最新交易日")
+    p_screen.add_argument("--codes", default=None, help="联调用：指定股票池（逗号分隔），跳过全市场清单拉取")
+    p_screen.add_argument("--limit", type=int, default=None, help="联调用：只扫描前N只")
+    p_screen.add_argument("--lookback-days", type=int, default=None, dest="lookback_days",
+                           help="行情回溯天数，默认等同 rater.DEFAULT_LOOKBACK_DAYS（400）")
+    p_screen.add_argument("--rating", choices=["BUY", "SELL"], default="BUY", help="筛选目标评级")
+    p_screen.add_argument("--output", default=None, help="报告输出路径，默认落在 strategies/reports/ 下")
+
     p_trade = sub.add_parser("trade", help="对接国金证券 QMT：生成委托预览或下单")
     trade_sub = p_trade.add_subparsers(dest="trade_command", required=True)
 
@@ -209,6 +242,8 @@ def main():
         cmd_backtest(args)
     elif args.command == "rate":
         cmd_rate(args)
+    elif args.command == "screen":
+        cmd_screen(args)
     elif args.command == "trade":
         if args.trade_command == "plan":
             cmd_trade_plan(args, execute=False)
