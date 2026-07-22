@@ -6,12 +6,14 @@ import re
 from dataclasses import dataclass
 
 POSITION_LABELS = ("空仓", "重仓", "中仓", "轻仓")
-ACTION_RE = re.compile(r"操作方向[：:]\s*\**\s*(BUY|SELL|HOLD)", re.IGNORECASE)
-POSITION_RE = re.compile(r"建议仓位[：:]\s*\**\s*([^\n*]+)")
-PRICE_RANGE_RE = re.compile(r"建议操作价区[：:]\s*\**\s*([^\n]*)")
-STOP_LOSS_RE = re.compile(r"止损位[：:]\s*\**\s*([^\n]*)")
-RATING_RE = re.compile(r"评级[：:]\s*\**\s*([^\n*]+)")
-SCORE_RE = re.compile(r"评分[：:]\s*\**\s*([\d.]+\s*/\s*10)")
+# 标签和数值两侧的 ** 加粗、数值外的 [] 都由 LLM 自由决定位置，因此标签与冒号之间、
+# 冒号与数值之间都要容忍可选的 ** ，数值本身也要容忍可选的 [] 包裹。
+ACTION_RE = re.compile(r"操作方向\s*\**\s*[：:]\s*\**\s*\[?\s*(BUY|SELL|HOLD)\s*\]?", re.IGNORECASE)
+POSITION_RE = re.compile(r"建议仓位\s*\**\s*[：:]\s*\**\s*([^\n*]+)")
+PRICE_RANGE_RE = re.compile(r"建议操作价区\s*\**\s*[：:]\s*\**\s*([^\n]*)")
+STOP_LOSS_RE = re.compile(r"止损位\s*\**\s*[：:]\s*\**\s*([^\n]*)")
+RATING_RE = re.compile(r"评级\s*\**\s*[：:]\s*\**\s*([^\n*]+)")
+SCORE_RE = re.compile(r"评分\s*\**\s*[：:]\s*\**\s*([\d.]+\s*/\s*10)")
 
 
 @dataclass

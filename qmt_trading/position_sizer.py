@@ -45,8 +45,10 @@ def build_order_plans(
             log(f"[跳过] {d.ticker} {d.warning}")
             continue
         if d.action == "HOLD":
+            log(f"[跳过] {d.ticker} 操作方向为 HOLD，无需下单")
             continue
         if not d.is_actionable:
+            log(f"[跳过] {d.ticker} 决策不可执行（action={d.action}, target_weight={d.target_weight}）")
             continue
         targets[d.ticker] = d
 
@@ -65,8 +67,8 @@ def build_order_plans(
         for t in buy_tickers:
             capped[t] *= scale
 
-    # 4) 逐股票计算买卖差额 -> 股数
-    plans = []
+    # 4) 逐股票计算买卖差额 -> 理论股数（此时先不考虑现金是否够用）
+    raw = []  # (ticker, decision, target_weight, side, shares, price)
     for ticker, decision in targets.items():
         price = latest_prices.get(ticker)
         if not price or price <= 0:
@@ -81,22 +83,48 @@ def build_order_plans(
         if decision.action == "SELL" and decision.position_label == "空仓":
             # 空仓档位 = 完全清仓，直接清空可用持仓，避免百手取整残留
             if pos.can_use_volume <= 0:
+                log(f"[跳过] {ticker} 已空仓，无可卖持仓")
                 continue
             shares = pos.can_use_volume
             side = "SELL"
         elif delta_value > 0:
             side = "BUY"
-            max_affordable = math.floor(cash / price / config.lot_size) * config.lot_size
             shares = math.floor(delta_value / price / config.lot_size) * config.lot_size
-            shares = min(shares, max_affordable)
         elif delta_value < 0:
             side = "SELL"
             shares = math.floor(-delta_value / price / config.lot_size) * config.lot_size
             shares = min(shares, pos.can_use_volume)
         else:
+            log(f"[跳过] {ticker} 当前持仓已等于目标市值，无需调仓")
             continue
 
         if shares <= 0:
+            log(f"[跳过] {ticker} 调仓差额不足一手（{config.lot_size}股），无需下单")
+            continue
+
+        raw.append((ticker, decision, target_weight, side, shares, price))
+
+    # 5) 若全部 BUY 所需资金合计超过可用现金，按比例统一缩放所有 BUY 订单，
+    #    避免按 STOCK_LIST 顺序"先到先得"占满现金，导致排在后面的股票被静默跳过
+    buy_total_notional = sum(shares * price for _, _, _, side, shares, price in raw if side == "BUY")
+    if buy_total_notional > cash and buy_total_notional > 0:
+        scale = max(cash, 0) / buy_total_notional
+        log(
+            f"[风控] 全部 BUY 所需资金合计 {buy_total_notional:.0f} 超过可用现金 {cash:.0f}，"
+            f"按比例缩放 {scale:.3f}"
+        )
+        scaled = []
+        for ticker, decision, target_weight, side, shares, price in raw:
+            if side == "BUY":
+                shares = math.floor(shares * scale / config.lot_size) * config.lot_size
+            scaled.append((ticker, decision, target_weight, side, shares, price))
+        raw = scaled
+
+    # 6) 生成最终委托单
+    plans = []
+    for ticker, decision, target_weight, side, shares, price in raw:
+        if shares <= 0:
+            log(f"[跳过] {ticker} 按可用现金比例缩放后不足一手（{config.lot_size}股），无需下单")
             continue
 
         notional = shares * price
@@ -118,8 +146,6 @@ def build_order_plans(
                 reason=f"{decision.action}/{decision.position_label}(目标{target_weight:.1%})",
             )
         )
-        if side == "BUY":
-            cash -= notional  # 后续股票的可用现金随之递减
 
     return plans
 
