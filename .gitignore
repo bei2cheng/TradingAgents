@@ -221,6 +221,7 @@ __marimo__/
 # Enterprise env file (secrets) and generated run reports
 .env.enterprise
 .env.example
-reports/
+reports/*
+!reports/analyze_stock.py
 qmt_trading/stock_picker/output/
 quant_strategy/strategies/
