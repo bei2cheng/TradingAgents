@@ -11,6 +11,8 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import datetime
 import json
 import warnings
