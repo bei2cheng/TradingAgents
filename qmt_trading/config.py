@@ -53,7 +53,7 @@ class QmtConfig:
         "QMT_SITE_PACKAGES_PATH", r"D:\国金证券QMT交易端\bin.x64\Lib\site-packages"
     )
     sim_userdata_path: str = os.getenv(
-        "QMT_SIM_USERDATA_PATH", os.getenv("QMT_USERDATA_PATH", r"D:\国金证券QMT交易端\userdata_mini")
+        "QMT_SIM_USERDATA_PATH", os.getenv("QMT_USERDATA_PATH", r"D:\国金QMT交易端模拟\userdata_mini")
     )
     live_userdata_path: str = os.getenv(
         "QMT_LIVE_USERDATA_PATH", os.getenv("QMT_USERDATA_PATH", r"D:\国金证券QMT交易端\userdata_mini")
@@ -64,18 +64,19 @@ class QmtConfig:
 
     # 仓位档位 -> 目标买入比例（占总资产）
     weight_heavy: float = _env_float("QMT_WEIGHT_HEAVY", 0.35)
-    weight_medium: float = _env_float("QMT_WEIGHT_MEDIUM", 0.25)
+    weight_medium: float = _env_float("QMT_WEIGHT_MEDIUM", 0.20)
     weight_light: float = _env_float("QMT_WEIGHT_LIGHT", 0.15)
     weight_empty: float = _env_float("QMT_WEIGHT_EMPTY", 0.0)
 
     # 风控上限
     max_single_stock_pct: float = _env_float("QMT_MAX_SINGLE_STOCK_PCT", 0.20)
     max_total_position_pct: float = _env_float("QMT_MAX_TOTAL_POSITION_PCT", 0.80)
+    max_stock_count_per_25k: int = _env_int("QMT_MAX_STOCK_COUNT_PER_25K", 1)
 
     # 下单参数
     lot_size: int = _env_int("QMT_LOT_SIZE", 100)
     slippage_pct: float = _env_float("QMT_SLIPPAGE_PCT", 0.005)
-    min_order_notional: float = _env_float("QMT_MIN_ORDER_NOTIONAL", 1000.0)
+    min_order_notional: float = _env_float("QMT_MIN_ORDER_NOTIONAL", 2000.0)
 
     reports_base: str = REPORTS_BASE
     stock_whitelist: tuple = field(default_factory=tuple)

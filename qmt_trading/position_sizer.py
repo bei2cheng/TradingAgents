@@ -120,6 +120,29 @@ def build_order_plans(
             scaled.append((ticker, decision, target_weight, side, shares, price))
         raw = scaled
 
+    # 5.5) 持仓股票数上限风控：总资产每 25000 元最多持有 max_stock_count_per_25k 只股票
+    max_allowed_stocks = math.floor(total_asset / 25000) * config.max_stock_count_per_25k
+    current_holding_tickers = {t for t, pos in positions.items() if pos.volume > 0}
+    new_buy_tickers = {ticker for ticker, _, _, side, shares, _ in raw if side == "BUY" and ticker not in current_holding_tickers and shares > 0}
+    total_after_buy = len(current_holding_tickers) + len(new_buy_tickers)
+
+    if total_after_buy > max_allowed_stocks:
+        excess = total_after_buy - max_allowed_stocks
+        log(
+            f"[风控] 本次执行后将持有 {total_after_buy} 只股票，超过上限 {max_allowed_stocks} "
+            f"（总资产 {total_asset:.0f} / 25000 × {config.max_stock_count_per_25k}），"
+            f"将放弃 {excess} 只新增 BUY 股票"
+        )
+        # 按目标市值从小到大排序新增 BUY 股票，优先放弃权重最小的
+        new_buy_list = sorted(
+            [(t, tw, s, p) for t, _, tw, side, s, p in raw if side == "BUY" and t in new_buy_tickers],
+            key=lambda x: x[1]  # 按 target_weight 升序
+        )
+        tickers_to_drop = {t for t, _, _, _ in new_buy_list[:excess]}
+        raw = [item for item in raw if not (item[0] in tickers_to_drop and item[3] == "BUY")]
+        for t in tickers_to_drop:
+            log(f"[跳过] {t} 超出持仓股票数上限，本次不买入")
+
     # 6) 生成最终委托单
     plans = []
     for ticker, decision, target_weight, side, shares, price in raw:
