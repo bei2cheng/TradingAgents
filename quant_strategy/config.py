@@ -49,7 +49,7 @@ class LlmConfig:
 
     api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     base_url: str = os.getenv("QS_LLM_BASE_URL", "https://api.deepseek.com")
-    model: str = os.getenv("QS_LLM_MODEL", "deepseek-chat")
+    model: str = os.getenv("QS_LLM_MODEL", "deepseek-v4-flash")
 
 
 AShare = AShareRules()

@@ -487,7 +487,7 @@ def analyze_one(ticker: str, market: str, analysis_date: str) -> dict:
 {json.dumps(analyst_ratings, ensure_ascii=False, indent=2)}
 """
 
-    def call_chat(system_prompt, user_content, max_tokens=1200, model="deepseek-chat"):
+    def call_chat(system_prompt, user_content, max_tokens=1200, model="deepseek-v4-flash"):
         resp = client.chat.completions.create(
             model=model,
             messages=[
@@ -510,7 +510,7 @@ def analyze_one(ticker: str, market: str, analysis_date: str) -> dict:
     sentiment_report = call_chat(SYS_SENTIMENT, f"请分析{ticker_display}：\n{data_ctx}")
     p("  [情绪分析完成]")
 
-    p("  [决策引擎] deepseek-reasoner 综合推理...")
+    p("  [决策引擎] deepseek-v4-pro 综合推理...")
     rsi_str  = f"{tech_summary['rsi14']:.1f}"    if isinstance(tech_summary.get('rsi14'),      float) else "N/A"
     macd_str = f"{tech_summary['macd']:.4f}"      if isinstance(tech_summary.get('macd'),       float) else "N/A"
     ret5_str = f"{tech_summary['ret_5d_pct']:.2f}%" if isinstance(tech_summary.get('ret_5d_pct'), float) else "N/A"
@@ -533,7 +533,7 @@ def analyze_one(ticker: str, market: str, analysis_date: str) -> dict:
         SYS_DECISION,
         f"综合分析{ticker_display}，给出最终投资决策：\n{combined}",
         max_tokens=2000,
-        model="deepseek-reasoner",
+        model="deepseek-v4-pro",
     )
     p("  [决策完成]")
 
